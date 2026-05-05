@@ -6,6 +6,8 @@
 #include <string>
 #include <algorithm>
 #include <limits>
+#include <iomanip>
+#include <sstream>
 
 using namespace std;
 
@@ -27,6 +29,7 @@ struct DFA
     set<int> finalStates;
     set<char> alphabet;
     map<int, map<char, int>> transitions;
+    map<int, set<int>> stateToSubset; // Maps DFA state ID → NFA subset
 };
 
 // ==================== Helper Functions ====================
@@ -39,8 +42,8 @@ void clearInputBuffer()
 void waitForUser()
 {
     cout << "\n[Press Enter to continue...]";
-    clearInputBuffer();
     cin.get();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
 string trim(const string &s)
@@ -50,7 +53,23 @@ string trim(const string &s)
     return (start == string::npos) ? "" : s.substr(start, end - start + 1);
 }
 
-// Compute ε-closure of a set of states (essential for correct conversion)
+string formatStateSubset(const DFA &dfa, int stateId)
+{
+    if (!dfa.stateToSubset.count(stateId))
+        return "q" + to_string(stateId);
+    string result = "{";
+    bool first = true;
+    for (int s : dfa.stateToSubset.at(stateId))
+    {
+        if (!first) result += ",";
+        result += "q" + to_string(s);
+        first = false;
+    }
+    result += "}";
+    return result;
+}
+
+// ==================== ε-Closure ====================
 set<int> getEpsilonClosure(const NFA &nfa, const set<int> &states)
 {
     set<int> closure = states;
@@ -76,14 +95,13 @@ set<int> getEpsilonClosure(const NFA &nfa, const set<int> &states)
     return closure;
 }
 
-// ==================== ASCII Visualization (Your Style, Enhanced) ====================
+// ==================== Visualization ====================
 void drawNFAGraphical(const NFA &nfa)
 {
     cout << "\n+==================================================+\n";
     cout << "|                 NFA GRAPHICAL VIEW                |\n";
     cout << "+==================================================+\n";
 
-    // Draw states line
     cout << "    ";
     for (int i = 0; i < nfa.numStates; i++)
     {
@@ -102,7 +120,6 @@ void drawNFAGraphical(const NFA &nfa)
     }
     cout << "}\n";
 
-    // Draw transitions
     cout << "\nTRANSITIONS:\n"
          << string(50, '-') << "\n";
     for (int i = 0; i < nfa.numStates; i++)
@@ -117,7 +134,6 @@ void drawNFAGraphical(const NFA &nfa)
                 }
             }
         }
-        // Show ε-transitions if any
         if (nfa.epsilonTransitions.count(i))
         {
             for (int target : nfa.epsilonTransitions.at(i))
@@ -127,7 +143,6 @@ void drawNFAGraphical(const NFA &nfa)
         }
     }
 
-    // Transition table
     cout << "\n"
          << string(60, '=') << "\n";
     cout << "TRANSITION TABLE:\n"
@@ -174,13 +189,12 @@ void drawDFAGraphical(const DFA &dfa)
     cout << "|                 DFA GRAPHICAL VIEW                |\n";
     cout << "+==================================================+\n";
 
-    // Draw states line
     cout << "    ";
     for (int i = 0; i < dfa.numStates; i++)
     {
         if (i == dfa.startState)
             cout << "->";
-        cout << (dfa.finalStates.count(i) ? "[*]" : "[ ]") << "q" << i;
+        cout << (dfa.finalStates.count(i) ? "[*]" : "[ ]") << formatStateSubset(dfa, i);
         if (i < dfa.numStates - 1)
             cout << "   ";
     }
@@ -193,45 +207,66 @@ void drawDFAGraphical(const DFA &dfa)
     }
     cout << "}\n";
 
-    // Transition table
     cout << "\n"
          << string(60, '=') << "\n";
     cout << "TRANSITION TABLE:\n"
          << string(60, '=') << "\n";
 
-    cout << "+---------";
-    for (size_t i = 0; i < dfa.alphabet.size(); i++)
-        cout << "+---------";
-    cout << "+\n| State   ";
-    for (char sym : dfa.alphabet)
-        cout << "|   " << sym << "     ";
-    cout << "|\n+---------";
-    for (size_t i = 0; i < dfa.alphabet.size(); i++)
-        cout << "+---------";
-    cout << "+\n";
-
+    // Calculate dynamic column width
+    int maxWidth = 3;
     for (int i = 0; i < dfa.numStates; i++)
     {
-        cout << "| q" << i << "     ";
+        string rep = formatStateSubset(dfa, i);
+        maxWidth = max(maxWidth, (int)rep.length());
+        // Also check transition targets
+        if (dfa.transitions.count(i))
+        {
+            for (char sym : dfa.alphabet)
+            {
+                if (dfa.transitions.at(i).count(sym))
+                {
+                    string target = formatStateSubset(dfa, dfa.transitions.at(i).at(sym));
+                    maxWidth = max(maxWidth, (int)target.length());
+                }
+            }
+        }
+    }
+    int colWidth = max(maxWidth + 4, 7);
+
+    // Table header
+    cout << "+" << string(colWidth, '-');
+    for (size_t i = 0; i < dfa.alphabet.size(); i++)
+        cout << "+" << string(colWidth, '-');
+    cout << "+\n| " << left << setw(colWidth - 2) << "State";
+    for (char sym : dfa.alphabet)
+        cout << "| " << setw(colWidth - 2) << string(1, sym);
+    cout << "|\n+" << string(colWidth, '-');
+    for (size_t i = 0; i < dfa.alphabet.size(); i++)
+        cout << "+" << string(colWidth, '-');
+    cout << "+\n";
+
+    // Table rows
+    for (int i = 0; i < dfa.numStates; i++)
+    {
+        cout << "| " << left << setw(colWidth - 2) << formatStateSubset(dfa, i);
         for (char sym : dfa.alphabet)
         {
             if (dfa.transitions.count(i) && dfa.transitions.at(i).count(sym))
             {
-                cout << "|   q" << dfa.transitions.at(i).at(sym) << "   ";
+                cout << "| " << setw(colWidth - 2) << formatStateSubset(dfa, dfa.transitions.at(i).at(sym));
             }
             else
             {
-                cout << "|    -    ";
+                cout << "| " << setw(colWidth - 2) << "-";
             }
         }
         cout << "|\n";
     }
-    cout << "+---------";
+    cout << "+" << string(colWidth, '-');
     for (size_t i = 0; i < dfa.alphabet.size(); i++)
-        cout << "+---------";
+        cout << "+" << string(colWidth, '-');
     cout << "+\n";
 
-    // Visual flow
     cout << "\nVISUAL FLOW:\n"
          << string(50, '-') << "\n";
     for (int i = 0; i < dfa.numStates; i++)
@@ -241,7 +276,7 @@ void drawDFAGraphical(const DFA &dfa)
             if (dfa.transitions.count(i) && dfa.transitions.at(i).count(sym))
             {
                 int t = dfa.transitions.at(i).at(sym);
-                cout << "  q" << i << " --" << sym << "--> q" << t;
+                cout << "  " << formatStateSubset(dfa, i) << " --" << sym << "--> " << formatStateSubset(dfa, t);
                 if (t == i)
                     cout << " (self-loop)";
                 if (dfa.finalStates.count(t))
@@ -253,8 +288,6 @@ void drawDFAGraphical(const DFA &dfa)
 }
 
 // ==================== Core Algorithms ====================
-
-// NFA → DFA with ε-closure + step-by-step academic logging
 DFA nfaToDfa(const NFA &nfa)
 {
     DFA dfa;
@@ -263,10 +296,10 @@ DFA nfaToDfa(const NFA &nfa)
     queue<set<int>> unprocessed;
     int nextId = 0;
 
-    // Start state = ε-closure of NFA start states
     set<int> startClosure = getEpsilonClosure(nfa, nfa.startStates);
     subsetMap[startClosure] = nextId++;
     dfa.startState = 0;
+    dfa.stateToSubset[0] = startClosure;
     unprocessed.push(startClosure);
 
     cout << "\n[CONVERSION STEPS]: NFA → DFA (Subset Construction)\n";
@@ -293,7 +326,15 @@ DFA nfaToDfa(const NFA &nfa)
         unprocessed.pop();
         int currId = subsetMap[current];
 
-        // Mark final if contains any NFA final state
+        cout << "\n[PROCESSING] DFA state " << currId << " = {";
+        first = true;
+        for (int s : current)
+        {
+            cout << (first ? "" : ", ") << "q" << s;
+            first = false;
+        }
+        cout << "}";
+
         for (int s : current)
         {
             if (nfa.finalStates.count(s))
@@ -303,7 +344,6 @@ DFA nfaToDfa(const NFA &nfa)
             }
         }
 
-        // Process each symbol
         for (char sym : dfa.alphabet)
         {
             set<int> moveSet;
@@ -319,74 +359,111 @@ DFA nfaToDfa(const NFA &nfa)
             }
             set<int> nextClosure = getEpsilonClosure(nfa, moveSet);
 
+            cout << "\n  δ'(" << currId << ", '" << sym << "') = ε-closure(move({";
+            first = true;
+            for (int s : current)
+            {
+                cout << (first ? "" : ", ") << "q" << s;
+                first = false;
+            }
+            cout << "}, '" << sym << "')) = ε-closure({";
+            first = true;
+            for (int s : moveSet)
+            {
+                cout << (first ? "" : ", ") << "q" << s;
+                first = false;
+            }
+            cout << "}) = {";
+            first = true;
+            for (int s : nextClosure)
+            {
+                cout << (first ? "" : ", ") << "q" << s;
+                first = false;
+            }
+            cout << "}";
+
             if (!nextClosure.empty())
             {
                 if (!subsetMap.count(nextClosure))
                 {
                     subsetMap[nextClosure] = nextId++;
+                    dfa.stateToSubset[subsetMap[nextClosure]] = nextClosure;
                     unprocessed.push(nextClosure);
-                    cout << "[NEW] DFA state " << subsetMap[nextClosure]
-                         << " = ε-closure(move({";
-                    first = true;
-                    for (int s : current)
-                    {
-                        cout << (first ? "" : ",") << s;
-                        first = false;
-                    }
-                    cout << "}, '" << sym << "')) = {";
-                    first = true;
-                    for (int s : nextClosure)
-                    {
-                        cout << (first ? "" : ",") << s;
-                        first = false;
-                    }
-                    cout << "}\n";
+                    cout << " → [NEW] DFA state " << subsetMap[nextClosure];
+                }
+                else
+                {
+                    cout << " → Existing DFA state " << subsetMap[nextClosure];
                 }
                 dfa.transitions[currId][sym] = subsetMap[nextClosure];
+            }
+            else
+            {
+                cout << " → No transition (empty set)";
             }
         }
     }
 
     dfa.numStates = nextId;
-    cout << "[SUCCESS] DFA created with " << dfa.numStates << " states.\n";
+    cout << "\n\n[SUCCESS] DFA created with " << dfa.numStates << " states.\n";
+
+    cout << "\nFinal DFA Parameters:\n";
+    cout << "Q' = { ";
+    first = true;
+    for (auto &pair : dfa.stateToSubset)
+    {
+        cout << (first ? "" : ", ") << "{";
+        bool innerFirst = true;
+        for (int s : pair.second)
+        {
+            cout << (innerFirst ? "" : ", ") << "q" << s;
+            innerFirst = false;
+        }
+        cout << "}";
+        first = false;
+    }
+    cout << " }\n";
+
+    cout << "Start state: {";
+    first = true;
+    for (int s : startClosure)
+    {
+        cout << (first ? "" : ", ") << "q" << s;
+        first = false;
+    }
+    cout << "}\n";
+
+    cout << "Final states: { ";
+    first = true;
+    for (int dfaState : dfa.finalStates)
+    {
+        cout << (first ? "" : ", ") << "{";
+        bool innerFirst = true;
+        for (int s : dfa.stateToSubset[dfaState])
+        {
+            cout << (innerFirst ? "" : ", ") << "q" << s;
+            innerFirst = false;
+        }
+        cout << "}";
+        first = false;
+    }
+    cout << " }\n";
+
     return dfa;
 }
 
-// DFA → NFA (Reverse Conversion)
-NFA dfaToNfa(const DFA &dfa)
-{
-    NFA nfa;
-    nfa.numStates = dfa.numStates;
-    nfa.startStates.insert(dfa.startState);
-    nfa.finalStates = dfa.finalStates;
-    nfa.alphabet = dfa.alphabet;
-
-    for (int i = 0; i < dfa.numStates; i++)
-    {
-        if (dfa.transitions.count(i))
-        {
-            for (auto &[sym, target] : dfa.transitions.at(i))
-            {
-                nfa.transitions[i][sym].insert(target);
-            }
-        }
-    }
-    return nfa;
-}
-
-// DFA Simulation with step-by-step trace (for testing abb, aabb, ab)
 bool simulateDfa(const DFA &dfa, const string &input)
 {
     int current = dfa.startState;
     cout << "\n[TRACE] Input: \"" << input << "\"\n";
-    cout << "  Start: q" << current << "\n";
+    cout << "  Start: " << formatStateSubset(dfa, current) << "\n";
 
     for (char c : input)
     {
         if (dfa.transitions.count(current) && dfa.transitions.at(current).count(c))
         {
             current = dfa.transitions.at(current).at(c);
-            cout << "  --'" << c << "'--> q" << current << "\n";
+            cout << "  --'" << c << "'--> " << formatStateSubset(dfa, current) << "\n";
         }
         else
         {
@@ -396,40 +473,12 @@ bool simulateDfa(const DFA &dfa, const string &input)
     }
 
     bool accepted = dfa.finalStates.count(current) > 0;
-    cout << "  Final: q" << current << " | Result: "
+    cout << "  Final: " << formatStateSubset(dfa, current) << " | Result: "
          << (accepted ? "✓ ACCEPTED" : "✗ REJECTED") << "\n";
     return accepted;
 }
 
-// ==================== Predefined Examples (From Your Code) ====================
-NFA getExample_Abb()
-{ // Strings ending with "ab"
-    NFA nfa;
-    nfa.numStates = 3;
-    nfa.startStates = {0};
-    nfa.finalStates = {2};
-    nfa.alphabet = {'a', 'b'};
-    nfa.transitions[0]['a'] = {0, 1};
-    nfa.transitions[0]['b'] = {0};
-    nfa.transitions[1]['b'] = {2};
-    return nfa;
-}
-
-NFA getExample_AaBb()
-{ // Strings containing "aa" or "bb"
-    NFA nfa;
-    nfa.numStates = 5;
-    nfa.startStates = {0};
-    nfa.finalStates = {3, 4};
-    nfa.alphabet = {'a', 'b'};
-    nfa.transitions[0]['a'] = {0, 1};
-    nfa.transitions[0]['b'] = {0, 2};
-    nfa.transitions[1]['a'] = {3};
-    nfa.transitions[2]['b'] = {4};
-    return nfa;
-}
-
-// ==================== User Input with Auto-Convert ====================
+// ==================== User Input ====================
 void showInputGuide()
 {
     cout << "\n[INPUT GUIDE] Create Your NFA:\n";
@@ -438,11 +487,6 @@ void showInputGuide()
     cout << "3. Alphabet: single characters (e.g., a b)\n";
     cout << "4. Transitions format: FROM SYMBOL TO\n";
     cout << "5. Use $ for ε-transitions (e.g., 0 $ 1)\n";
-    cout << "\nExample for (a|b)*abb:\n";
-    cout << "  States: 4 | Start: 0 | Final: 3\n";
-    cout << "  Alphabet: a b\n";
-    cout << "  Transitions:\n";
-    cout << "    0 a 0   0 a 1   0 b 0   1 b 2   2 b 3\n";
 }
 
 NFA inputCustomNFA()
@@ -540,7 +584,7 @@ NFA inputCustomNFA()
 int main()
 {
     cout << "\n+==================================================+\n";
-    cout << "|   NFA ↔ DFA CONVERTER & SIMULATOR               |\n";
+    cout << "|   NFA → DFA CONVERTER & SIMULATOR               |\n";
     cout << "|   Theory of Computation - Final Project 2026    |\n";
     cout << "+==================================================+\n";
 
@@ -551,21 +595,14 @@ int main()
     do
     {
         cout << "\n+----------------- MAIN MENU -----------------+\n";
-        cout << "| 1. Load Example: Strings ending with 'ab'   |\n";
-        cout << "| 2. Load Example: Strings with 'aa' or 'bb'  |\n";
-        cout << "| 3. Input Custom NFA (AUTO-CONVERT to DFA)   |\n";
-        cout << "| 4. Convert Current NFA → DFA                |\n";
-        cout << "| 5. Convert Current DFA → NFA (Reverse)      |\n";
-        cout << "| 6. Simulate DFA: Test abb, aabb, ab, etc.   |\n";
-        cout << "| 7. Visualize Current NFA                    |\n";
-        cout << "| 8. Visualize Current DFA                    |\n";
+        cout << "| 1. Input NFA → DFA & Simulate              |\n";
         cout << "| 0. Exit                                     |\n";
         cout << "+---------------------------------------------+\n";
         cout << "Choice: ";
-        if (!(cin >> choice) || choice < 0 || choice > 8)
+        if (!(cin >> choice) || choice < 0 || choice > 1)
         {
             choice = -1;
-            cout << "[ERROR] Invalid Input choose from 0-8.\n";
+            cout << "[ERROR] Invalid Input choose from 0-1.\n";
             clearInputBuffer();
             continue;
         }
@@ -573,67 +610,20 @@ int main()
         switch (choice)
         {
         case 1:
-            currentNFA = getExample_Abb();
-            cout << "[OK] Loaded: Strings ending with 'ab'\n";
-            drawNFAGraphical(currentNFA);
-            // AUTO-CONVERT
-            cout << "\n[AUTO] Converting NFA → DFA...\n";
-            currentDFA = nfaToDfa(currentNFA);
-            drawDFAGraphical(currentDFA);
-            waitForUser();
-            break;
-
-        case 2:
-            currentNFA = getExample_AaBb();
-            cout << "[OK] Loaded: Strings containing 'aa' or 'bb'\n";
-            drawNFAGraphical(currentNFA);
-            // AUTO-CONVERT
-            cout << "\n[AUTO] Converting NFA → DFA...\n";
-            currentDFA = nfaToDfa(currentNFA);
-            drawDFAGraphical(currentDFA);
-            waitForUser();
-            break;
-
-        case 3:
+            if (currentNFA.numStates != 0)
+            {
+                cout << "\n[INFO] Previous NFA/DFA will be cleared.\n";
+            }
             currentNFA = inputCustomNFA();
-            cout << "\n[OK] Custom NFA loaded!\n";
-            drawNFAGraphical(currentNFA);
-            // AUTO-CONVERT TO DFA
-            cout << "\n[AUTO] Converting your NFA → DFA...\n";
+            cout << "\n[AUTO] Converting NFA → DFA...\n";
             currentDFA = nfaToDfa(currentNFA);
-            drawDFAGraphical(currentDFA);
-            waitForUser();
-            break;
 
-        case 4:
-            if (currentNFA.numStates == 0)
-            {
-                cout << "[WARN] Load an NFA first.\n";
-                break;
-            }
-            currentDFA = nfaToDfa(currentNFA);
-            drawDFAGraphical(currentDFA);
-            waitForUser();
-            break;
-
-        case 5:
-            if (currentDFA.numStates == 0)
-            {
-                cout << "[WARN] Convert NFA→DFA first.\n";
-                break;
-            }
-            currentNFA = dfaToNfa(currentDFA);
-            cout << "[OK] DFA → NFA conversion complete.\n";
             drawNFAGraphical(currentNFA);
             waitForUser();
-            break;
 
-        case 6: // SIMULATE DFA ON TEST STRINGS
-            if (currentDFA.numStates == 0)
-            {
-                cout << "[WARN] No DFA available.\n";
-                break;
-            }
+            drawDFAGraphical(currentDFA);
+            waitForUser();
+
             cout << "\n[Test Strings] Type 'exit' to stop:\n";
             while (true)
             {
@@ -646,7 +636,6 @@ int main()
                 if (input == "exit")
                     break;
 
-                // Validate alphabet
                 bool valid = true;
                 for (char c : input)
                 {
@@ -662,24 +651,8 @@ int main()
                     continue;
                 }
 
-                simulateDfa(currentDFA, input); // Shows ACCEPT/REJECT
+                simulateDfa(currentDFA, input);
             }
-            break;
-
-        case 7:
-            if (currentNFA.numStates == 0)
-                cout << "[WARN] No NFA.\n";
-            else
-                drawNFAGraphical(currentNFA);
-            waitForUser();
-            break;
-
-        case 8:
-            if (currentDFA.numStates == 0)
-                cout << "[WARN] No DFA.\n";
-            else
-                drawDFAGraphical(currentDFA);
-            waitForUser();
             break;
 
         case 0:
@@ -687,7 +660,7 @@ int main()
             break;
 
         default:
-            cout << "[ERROR] Invalid Input choose from 0-8.\n";
+            cout << "[ERROR] Invalid Input choose from 0-1.\n";
             waitForUser();
         }
     } while (choice != 0);
