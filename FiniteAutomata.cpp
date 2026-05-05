@@ -57,9 +57,13 @@ string formatStateSubset(const DFA &dfa, int stateId)
 {
     if (!dfa.stateToSubset.count(stateId))
         return "q" + to_string(stateId);
+    const set<int>& subset = dfa.stateToSubset.at(stateId);
+    if (subset.empty()) {
+        return "φ";
+    }
     string result = "{";
     bool first = true;
-    for (int s : dfa.stateToSubset.at(stateId))
+    for (int s : subset)
     {
         if (!first) result += ",";
         result += "q" + to_string(s);
@@ -302,6 +306,16 @@ DFA nfaToDfa(const NFA &nfa)
     dfa.stateToSubset[0] = startClosure;
     unprocessed.push(startClosure);
 
+    // Create dead state for empty set (φ)
+    set<int> emptySet;
+    subsetMap[emptySet] = nextId++;
+    int deadStateId = subsetMap[emptySet];
+    dfa.stateToSubset[deadStateId] = emptySet;
+    // Add self-loops for dead state
+    for (char sym : dfa.alphabet) {
+        dfa.transitions[deadStateId][sym] = deadStateId;
+    }
+
     cout << "\n[CONVERSION STEPS]: NFA → DFA (Subset Construction)\n";
     cout << string(60, '-') << "\n";
     cout << "[STEP 0] Start = ε-closure({";
@@ -399,7 +413,9 @@ DFA nfaToDfa(const NFA &nfa)
             }
             else
             {
-                cout << " → No transition (empty set)";
+                // Map to dead state (φ)
+                dfa.transitions[currId][sym] = deadStateId;
+                cout << " → Dead state (φ)";
             }
         }
     }
@@ -412,14 +428,7 @@ DFA nfaToDfa(const NFA &nfa)
     first = true;
     for (auto &pair : dfa.stateToSubset)
     {
-        cout << (first ? "" : ", ") << "{";
-        bool innerFirst = true;
-        for (int s : pair.second)
-        {
-            cout << (innerFirst ? "" : ", ") << "q" << s;
-            innerFirst = false;
-        }
-        cout << "}";
+        cout << (first ? "" : ", ") << formatStateSubset(dfa, pair.first);
         first = false;
     }
     cout << " }\n";
@@ -475,6 +484,82 @@ bool simulateDfa(const DFA &dfa, const string &input)
     bool accepted = dfa.finalStates.count(current) > 0;
     cout << "  Final: " << formatStateSubset(dfa, current) << " | Result: "
          << (accepted ? "✓ ACCEPTED" : "✗ REJECTED") << "\n";
+    return accepted;
+}
+
+set<int> getNfaTransition(const NFA &nfa, const set<int> &states, char sym)
+{
+    set<int> result;
+    for (int s : states)
+    {
+        if (nfa.transitions.count(s) && nfa.transitions.at(s).count(sym))
+        {
+            for (int next : nfa.transitions.at(s).at(sym))
+            {
+                result.insert(next);
+            }
+        }
+    }
+    return result;
+}
+
+bool simulateNfa(const NFA &nfa, const string &input)
+{
+    set<int> currentStates = getEpsilonClosure(nfa, nfa.startStates);
+    cout << "\n[TRACE] Input: \"" << input << "\"\n";
+    cout << "  Start: {";
+    bool first = true;
+    for (int s : currentStates)
+    {
+        cout << (first ? "" : ", ") << "q" << s;
+        first = false;
+    }
+    cout << "}\n";
+
+    for (char c : input)
+    {
+        if (!nfa.alphabet.count(c))
+        {
+            cout << "  --'" << c << "'--> REJECTED (invalid symbol)\n";
+            return false;
+        }
+        set<int> nextStates = getNfaTransition(nfa, currentStates, c);
+        nextStates = getEpsilonClosure(nfa, nextStates);
+
+        cout << "  --'" << c << "'--> {";
+        first = true;
+        for (int s : nextStates)
+        {
+            cout << (first ? "" : ", ") << "q" << s;
+            first = false;
+        }
+        cout << "}\n";
+
+        if (nextStates.empty())
+        {
+            cout << "  REJECTED (no states)\n";
+            return false;
+        }
+        currentStates = nextStates;
+    }
+
+    bool accepted = false;
+    for (int s : currentStates)
+    {
+        if (nfa.finalStates.count(s))
+        {
+            accepted = true;
+            break;
+        }
+    }
+    cout << "  Final: {";
+    first = true;
+    for (int s : currentStates)
+    {
+        cout << (first ? "" : ", ") << "q" << s;
+        first = false;
+    }
+    cout << "} | Result: " << (accepted ? "✓ ACCEPTED" : "✗ REJECTED") << "\n";
     return accepted;
 }
 
@@ -580,6 +665,100 @@ NFA inputCustomNFA()
     return nfa;
 }
 
+DFA inputCustomDFA()
+{
+    DFA dfa;
+    cout << "\n--- Enter Your DFA ---\n";
+    cout << "Number of states: ";
+    cin >> dfa.numStates;
+
+    cout << "Start state ID: ";
+    cin >> dfa.startState;
+    if (dfa.startState < 0 || dfa.startState >= dfa.numStates)
+    {
+        cout << "[ERROR] Invalid start state. Setting to 0.\n";
+        dfa.startState = 0;
+    }
+
+    int finalCount;
+    cout << "Number of final states: ";
+    cin >> finalCount;
+    cout << "Final state IDs: ";
+    for (int i = 0; i < finalCount; i++)
+    {
+        int f;
+        cin >> f;
+        if (f >= 0 && f < dfa.numStates)
+            dfa.finalStates.insert(f);
+        else
+        {
+            cout << "  Invalid! ";
+            i--;
+        }
+    }
+
+    int alphaSize;
+    cout << "Alphabet size: ";
+    cin >> alphaSize;
+    cout << "Alphabet characters: ";
+    for (int i = 0; i < alphaSize; i++)
+    {
+        char c;
+        cin >> c;
+        dfa.alphabet.insert(c);
+    }
+
+    int transCount;
+    cout << "Number of transitions: ";
+    cin >> transCount;
+    cout << "Enter transitions (FROM SYMBOL TO):\n";
+    for (int i = 0; i < transCount; i++)
+    {
+        int from, to;
+        char sym;
+        cout << "  #" << (i + 1) << ": ";
+        cin >> from >> sym >> to;
+
+        if (from >= 0 && from < dfa.numStates &&
+            to >= 0 && to < dfa.numStates &&
+            dfa.alphabet.count(sym))
+        {
+            dfa.transitions[from][sym] = to;
+        }
+        else
+        {
+            cout << "  Invalid! Try again.\n";
+            i--;
+        }
+    }
+    return dfa;
+}
+
+NFA dfaToNfa(const DFA &dfa)
+{
+    NFA nfa;
+    nfa.numStates = dfa.numStates;
+    nfa.startStates.insert(dfa.startState);
+    nfa.finalStates = dfa.finalStates;
+    nfa.alphabet = dfa.alphabet;
+
+    for (int from = 0; from < dfa.numStates; from++)
+    {
+        if (dfa.transitions.count(from))
+        {
+            for (char sym : dfa.alphabet)
+            {
+                if (dfa.transitions.at(from).count(sym))
+                {
+                    int to = dfa.transitions.at(from).at(sym);
+                    nfa.transitions[from][sym].insert(to);
+                }
+            }
+        }
+    }
+    return nfa;
+}
+
 // ==================== Main Program ====================
 int main()
 {
@@ -595,14 +774,15 @@ int main()
     do
     {
         cout << "\n+----------------- MAIN MENU -----------------+\n";
-        cout << "| 1. Input NFA → DFA & Simulate              |\n";
+        cout << "| 1. NFA → DFA & Simulate                    |\n";
+        cout << "| 2. DFA → NFA & Simulate                    |\n";
         cout << "| 0. Exit                                     |\n";
         cout << "+---------------------------------------------+\n";
         cout << "Choice: ";
-        if (!(cin >> choice) || choice < 0 || choice > 1)
+        if (!(cin >> choice) || choice < 0 || choice > 2)
         {
             choice = -1;
-            cout << "[ERROR] Invalid Input choose from 0-1.\n";
+            cout << "[ERROR] Invalid Input choose from 0-2.\n";
             clearInputBuffer();
             continue;
         }
@@ -612,9 +792,25 @@ int main()
         case 1:
             if (currentNFA.numStates != 0)
             {
-                cout << "\n[INFO] Previous NFA/DFA will be cleared.\n";
+                cout << "\n[INFO] NFA already exists.\n";
+                cout << "1. Use stored NFA\n";
+                cout << "2. Input new NFA\n";
+                cout << "Choice: ";
+                int nfaChoice;
+                cin >> nfaChoice;
+                if (nfaChoice == 2)
+                {
+                    currentNFA = inputCustomNFA();
+                }
+                else
+                {
+                    cout << "[INFO] Using stored NFA.\n";
+                }
             }
-            currentNFA = inputCustomNFA();
+            else
+            {
+                currentNFA = inputCustomNFA();
+            }
             cout << "\n[AUTO] Converting NFA → DFA...\n";
             currentDFA = nfaToDfa(currentNFA);
 
@@ -624,7 +820,7 @@ int main()
             drawDFAGraphical(currentDFA);
             waitForUser();
 
-            cout << "\n[Test Strings] Type 'exit' to stop:\n";
+            cout << "\n[Test Strings on DFA] Type 'exit' to stop:\n";
             while (true)
             {
                 cout << "> ";
@@ -655,12 +851,71 @@ int main()
             }
             break;
 
+        case 2:
+            if (currentDFA.numStates != 0)
+            {
+                cout << "\n[INFO] DFA already exists.\n";
+                cout << "1. Use stored DFA\n";
+                cout << "2. Input new DFA\n";
+                cout << "Choice: ";
+                int dfaChoice;
+                cin >> dfaChoice;
+                if (dfaChoice == 2)
+                {
+                    currentDFA = inputCustomDFA();
+                }
+                else
+                {
+                    cout << "[INFO] Using stored DFA.\n";
+                }
+            }
+            else
+            {
+                currentDFA = inputCustomDFA();
+            }
+            cout << "\n[AUTO] Converting DFA → NFA...\n";
+            currentNFA = dfaToNfa(currentDFA);
+
+            drawNFAGraphical(currentNFA);
+            waitForUser();
+
+            cout << "\n[Test Strings on NFA] Type 'exit' to stop:\n";
+            while (true)
+            {
+                cout << "> ";
+                string input;
+                getline(cin >> ws, input);
+                input = trim(input);
+                if (input.empty())
+                    continue;
+                if (input == "exit")
+                    break;
+
+                bool valid = true;
+                for (char c : input)
+                {
+                    if (!currentNFA.alphabet.count(c))
+                    {
+                        valid = false;
+                        break;
+                    }
+                }
+                if (!valid)
+                {
+                    cout << "[WARN] Invalid symbols.\n";
+                    continue;
+                }
+
+                simulateNfa(currentNFA, input);
+            }
+            break;
+
         case 0:
             cout << "\n[INFO] Good luck with your TOC project! 🎓\n";
             break;
 
         default:
-            cout << "[ERROR] Invalid Input choose from 0-1.\n";
+            cout << "[ERROR] Invalid Input choose from 0-2.\n";
             waitForUser();
         }
     } while (choice != 0);
