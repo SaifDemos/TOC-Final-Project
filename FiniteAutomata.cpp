@@ -8,6 +8,7 @@
 #include <limits>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 using namespace std;
 
@@ -103,8 +104,8 @@ set<int> getEpsilonClosure(const NFA &nfa, const set<int> &states)
 void drawNFAGraphical(const NFA &nfa)
 {
     cout << "\n+==================================================+\n";
-    cout << "|                 NFA GRAPHICAL VIEW                |\n";
-    cout << "+==================================================+\n";
+    cout << "|                 NFA GRAPHICAL VIEW                 |\n";
+    cout << "+====================================================+\n";
 
     cout << "    ";
     for (int i = 0; i < nfa.numStates; i++)
@@ -291,6 +292,151 @@ void drawDFAGraphical(const DFA &dfa)
     }
 }
 
+// ==================== Graphviz PDF Generation ====================
+string generateNfaDot(const NFA &nfa)
+{
+    stringstream dot;
+    dot << "digraph NFA {\n";
+    dot << "  rankdir=LR;\n";
+    dot << "  node [shape=circle, style=filled, fillcolor=\"#E8F4F8\"];\n";
+    dot << "  edge [fontsize=10];\n\n";
+
+    // Invisible start node
+    dot << "  start [shape=plaintext, label=\"\"];\n\n";
+
+    // Nodes
+    for (int i = 0; i < nfa.numStates; i++)
+    {
+        dot << "  q" << i;
+        if (nfa.finalStates.count(i))
+            dot << " [shape=doublecircle]";
+        dot << ";\n";
+    }
+    dot << "\n";
+
+    // Start state arrows
+    for (int s : nfa.startStates)
+    {
+        dot << "  start -> q" << s << ";\n";
+    }
+    dot << "\n";
+
+    // Transitions
+    for (int i = 0; i < nfa.numStates; i++)
+    {
+        for (char sym : nfa.alphabet)
+        {
+            if (nfa.transitions.count(i) && nfa.transitions.at(i).count(sym))
+            {
+                for (int target : nfa.transitions.at(i).at(sym))
+                {
+                    dot << "  q" << i << " -> q" << target << " [label=\"" << sym << "\"];\n";
+                }
+            }
+        }
+        if (nfa.epsilonTransitions.count(i))
+        {
+            for (int target : nfa.epsilonTransitions.at(i))
+            {
+                dot << "  q" << i << " -> q" << target << " [label=\"ε\", style=dashed];\n";
+            }
+        }
+    }
+
+    dot << "}\n";
+    return dot.str();
+}
+
+string generateDfaDot(const DFA &dfa)
+{
+    stringstream dot;
+    dot << "digraph DFA {\n";
+    dot << "  rankdir=LR;\n";
+    dot << "  node [shape=circle, style=filled, fillcolor=\"#E8F4F8\"];\n";
+    dot << "  edge [fontsize=10];\n\n";
+
+    // Invisible start node
+    dot << "  start [shape=plaintext, label=\"\"];\n\n";
+
+    // Nodes
+    for (int i = 0; i < dfa.numStates; i++)
+    {
+        dot << "  state" << i;
+        if (dfa.finalStates.count(i))
+            dot << " [shape=doublecircle]";
+        dot << " [label=\"" << formatStateSubset(dfa, i) << "\"]";
+        dot << ";\n";
+    }
+    dot << "\n";
+
+    // Start state arrow
+    dot << "  start -> state" << dfa.startState << ";\n\n";
+
+    // Transitions
+    for (int i = 0; i < dfa.numStates; i++)
+    {
+        if (dfa.transitions.count(i))
+        {
+            for (char sym : dfa.alphabet)
+            {
+                if (dfa.transitions.at(i).count(sym))
+                {
+                    int target = dfa.transitions.at(i).at(sym);
+                    dot << "  state" << i << " -> state" << target
+                        << " [label=\"" << sym << "\"];\n";
+                }
+            }
+        }
+    }
+
+    dot << "}\n";
+    return dot.str();
+}
+
+bool saveDotToPdf(const string &dotCode, const string &filename)
+{
+    string dotFile = filename + ".dot";
+    string pdfFile = filename + ".pdf";
+
+    // Write DOT file
+    ofstream out(dotFile);
+    if (!out)
+    {
+        cout << "[ERROR] Cannot create " << dotFile << "\n";
+        return false;
+    }
+    out << dotCode;
+    out.close();
+
+    // Run dot
+    string cmd = "dot -Tpdf " + dotFile + " -o " + pdfFile;
+    int result = system(cmd.c_str());
+
+    // Clean up DOT file
+    remove(dotFile.c_str());
+
+    if (result != 0)
+    {
+        cout << "[ERROR] dot command failed. Is Graphviz installed?\n";
+        return false;
+    }
+
+    cout << "[INFO] Saved to " << pdfFile << "\n";
+    return true;
+}
+
+void saveNfaToPdf(const NFA &nfa, const string &baseName)
+{
+    string dot = generateNfaDot(nfa);
+    saveDotToPdf(dot, baseName);
+}
+
+void saveDfaToPdf(const DFA &dfa, const string &baseName)
+{
+    string dot = generateDfaDot(dfa);
+    saveDotToPdf(dot, baseName);
+}
+
 // ==================== Core Algorithms ====================
 DFA nfaToDfa(const NFA &nfa)
 {
@@ -306,7 +452,7 @@ DFA nfaToDfa(const NFA &nfa)
     dfa.stateToSubset[0] = startClosure;
     unprocessed.push(startClosure);
 
-    // Create dead state for empty set (φ)
+    // Create dead state for empty set (φ) - must be after start state
     set<int> emptySet;
     subsetMap[emptySet] = nextId++;
     int deadStateId = subsetMap[emptySet];
@@ -763,9 +909,9 @@ NFA dfaToNfa(const DFA &dfa)
 int main()
 {
     cout << "\n+==================================================+\n";
-    cout << "|   NFA → DFA CONVERTER & SIMULATOR               |\n";
-    cout << "|   Theory of Computation - Final Project 2026    |\n";
-    cout << "+==================================================+\n";
+    cout << "|   NFA → DFA CONVERTER & SIMULATOR                  |\n";
+    cout << "|   Theory of Computation - Final Project 2026       |\n";
+    cout << "+====================================================+\n";
 
     NFA currentNFA;
     DFA currentDFA;
@@ -774,10 +920,10 @@ int main()
     do
     {
         cout << "\n+----------------- MAIN MENU -----------------+\n";
-        cout << "| 1. NFA → DFA & Simulate                    |\n";
-        cout << "| 2. DFA → NFA & Simulate                    |\n";
-        cout << "| 0. Exit                                     |\n";
-        cout << "+---------------------------------------------+\n";
+        cout << "| 1. NFA → DFA & Simulate                       |\n";
+        cout << "| 2. DFA → NFA & Simulate                       |\n";
+        cout << "| 0. Exit                                       |\n";
+        cout << "+-----------------------------------------------+\n";
         cout << "Choice: ";
         if (!(cin >> choice) || choice < 0 || choice > 2)
         {
@@ -815,9 +961,11 @@ int main()
             currentDFA = nfaToDfa(currentNFA);
 
             drawNFAGraphical(currentNFA);
+            saveNfaToPdf(currentNFA, "NFA");
             waitForUser();
 
             drawDFAGraphical(currentDFA);
+            saveDfaToPdf(currentDFA, "DFA");
             waitForUser();
 
             cout << "\n[Test Strings on DFA] Type 'exit' to stop:\n";
@@ -877,6 +1025,7 @@ int main()
             currentNFA = dfaToNfa(currentDFA);
 
             drawNFAGraphical(currentNFA);
+            saveNfaToPdf(currentNFA, "NFA_from_DFA");
             waitForUser();
 
             cout << "\n[Test Strings on NFA] Type 'exit' to stop:\n";
