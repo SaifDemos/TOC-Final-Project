@@ -2,3 +2,7 @@ AGENTS.md
 *.sh
 *.pdf
 FiniteAutomata
+*.o
+Makefile
+Classes/*.o
+main.o
