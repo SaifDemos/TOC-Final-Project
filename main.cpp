@@ -12,9 +12,9 @@ using namespace std;
 int main()
 {
     cout << "\n+==================================================+\n";
-    cout << "|   NFA → DFA CONVERTER & SIMULATOR                  |\n";
-    cout << "|   Theory of Computation - Final Project 2026       |\n";
-    cout << "+====================================================+\n";
+    cout << "|   NFA → DFA CONVERTER & SIMULATOR                |\n";
+    cout << "|   Theory of Computation - Final Project 2026     |\n";
+    cout << "+==================================================+\n";
 
     NFA currentNFA;
     DFA currentDFA;
@@ -23,10 +23,10 @@ int main()
     do
     {
         cout << "\n+----------------- MAIN MENU -----------------+\n";
-        cout << "| 1. NFA → DFA & Simulate                       |\n";
-        cout << "| 2. DFA → NFA & Simulate                       |\n";
-        cout << "| 0. Exit                                       |\n";
-        cout << "+-----------------------------------------------+\n";
+        cout << "| 1. NFA → DFA & Simulate                     |\n";
+        cout << "| 2. DFA → NFA & Simulate                     |\n";
+        cout << "| 0. Exit                                     |\n";
+        cout << "+---------------------------------------------+\n";
         cout << "Choice: ";
         if (!readInt(choice, 0, 2, "[ERROR] Invalid Input choose from 0-2.\n"))
         {

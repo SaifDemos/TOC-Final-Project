@@ -16,8 +16,8 @@ void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
     }
 
     cout << "\n+==================================================+\n";
-    cout << "|                 NFA GRAPHICAL VIEW                 |\n";
-    cout << "+====================================================+\n";
+    cout << "|                 NFA GRAPHICAL VIEW               |\n";
+    cout << "+==================================================+\n";
 
     cout << "    ";
     for (int i = 0; i < nfa.numStates; i++)
@@ -114,7 +114,7 @@ void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
     }
 
     cout << "\n+==================================================+\n";
-    cout << "|                 DFA GRAPHICAL VIEW                |\n";
+    cout << "|                 DFA GRAPHICAL VIEW               |\n";
     cout << "+==================================================+\n";
 
     cout << "    ";
