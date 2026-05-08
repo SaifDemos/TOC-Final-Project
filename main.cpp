@@ -18,7 +18,7 @@ int main()
 
     NFA currentNFA;
     DFA currentDFA;
-    int choice;
+    int choice = -1;
 
     do
     {
@@ -28,25 +28,28 @@ int main()
         cout << "| 0. Exit                                       |\n";
         cout << "+-----------------------------------------------+\n";
         cout << "Choice: ";
-        if (!(cin >> choice) || choice < 0 || choice > 2)
+        if (!readInt(choice, 0, 2, "[ERROR] Invalid Input choose from 0-2.\n"))
         {
-            choice = -1;
-            cout << "[ERROR] Invalid Input choose from 0-2.\n";
-            clearInputBuffer();
+            if (cin.eof())
+            {
+                cout << "[INFO] Goodbye!\n";
+                break;
+            }
             continue;
         }
 
         switch (choice)
         {
         case 1:
-            if (currentNFA.numStates != 0)
+            if (currentNFA.numStates > 0)
             {
                 cout << "\n[INFO] NFA already exists.\n";
                 cout << "1. Use stored NFA\n";
                 cout << "2. Input new NFA\n";
                 cout << "Choice: ";
                 int nfaChoice;
-                cin >> nfaChoice;
+                if (!readInt(nfaChoice, 1, 2, "[ERROR] Enter 1 or 2\n"))
+                    continue;
                 if (nfaChoice == 2)
                     currentNFA = UserInputHandler::inputCustomNFA();
                 else
@@ -71,7 +74,11 @@ int main()
             {
                 cout << "> ";
                 string input;
-                getline(cin >> ws, input);
+                if (cin.eof())
+                    break;
+                getline(cin, input);
+                if (cin.eof())
+                    break;
                 input = trim(input);
                 if (input.empty())
                     continue;
@@ -98,14 +105,15 @@ int main()
             break;
 
         case 2:
-            if (currentDFA.numStates != 0)
+            if (currentDFA.numStates > 0)
             {
                 cout << "\n[INFO] DFA already exists.\n";
                 cout << "1. Use stored DFA\n";
                 cout << "2. Input new DFA\n";
                 cout << "Choice: ";
                 int dfaChoice;
-                cin >> dfaChoice;
+                if (!readInt(dfaChoice, 1, 2, "[ERROR] Enter 1 or 2\n"))
+                    continue;
                 if (dfaChoice == 2)
                     currentDFA = UserInputHandler::inputCustomDFA();
                 else
@@ -126,7 +134,11 @@ int main()
             {
                 cout << "> ";
                 string input;
-                getline(cin >> ws, input);
+                if (cin.eof())
+                    break;
+                getline(cin, input);
+                if (cin.eof())
+                    break;
                 input = trim(input);
                 if (input.empty())
                     continue;

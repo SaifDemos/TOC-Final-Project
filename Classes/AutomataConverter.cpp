@@ -148,10 +148,14 @@ DFA AutomataConverter::nfaToDfa(const NFA &nfa)
     {
         cout << (first ? "" : ", ") << "{";
         bool innerFirst = true;
-        for (int s : dfa.stateToSubset.at(dfaState))
+        auto it = dfa.stateToSubset.find(dfaState);
+        if (it != dfa.stateToSubset.end())
         {
-            cout << (innerFirst ? "" : ", ") << "q" << s;
-            innerFirst = false;
+            for (int s : it->second)
+            {
+                cout << (innerFirst ? "" : ", ") << "q" << s;
+                innerFirst = false;
+            }
         }
         cout << "}";
         first = false;

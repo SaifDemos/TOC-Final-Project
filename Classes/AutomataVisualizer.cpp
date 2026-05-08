@@ -9,6 +9,12 @@ using namespace std;
 
 void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
 {
+    if (nfa.numStates <= 0)
+    {
+        cout << "\n[WARN] No NFA to display (numStates <= 0)\n";
+        return;
+    }
+
     cout << "\n+==================================================+\n";
     cout << "|                 NFA GRAPHICAL VIEW                 |\n";
     cout << "+====================================================+\n";
@@ -58,8 +64,9 @@ void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
     cout << "\n" << string(60, '=') << "\n";
     cout << "TRANSITION TABLE:\n" << string(60, '=') << "\n";
 
-    vector<vector<string>> matrix(nfa.numStates, vector<string>(nfa.numStates, "-"));
-    for (int i = 0; i < nfa.numStates; i++)
+    int numStates = min(nfa.numStates, 20); // Cap for display
+    vector<vector<string>> matrix(numStates, vector<string>(numStates, "-"));
+    for (int i = 0; i < numStates; i++)
     {
         for (char sym : nfa.alphabet)
         {
@@ -71,10 +78,13 @@ void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
                 {
                     for (int target : sit->second)
                     {
-                        if (matrix[i][target] == "-")
-                            matrix[i][target] = string(1, sym);
-                        else
-                            matrix[i][target] += "," + string(1, sym);
+                        if (target >= 0 && target < numStates)
+                        {
+                            if (matrix[i][target] == "-")
+                                matrix[i][target] = string(1, sym);
+                            else
+                                matrix[i][target] += "," + string(1, sym);
+                        }
                     }
                 }
             }
@@ -82,14 +92,14 @@ void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
     }
 
     cout << "      ";
-    for (int j = 0; j < nfa.numStates; j++)
+    for (int j = 0; j < numStates; j++)
         cout << " q" << j << "  ";
-    cout << "\n" << string(5 + nfa.numStates * 5, '-') << "\n";
+    cout << "\n" << string(5 + numStates * 5, '-') << "\n";
 
-    for (int i = 0; i < nfa.numStates; i++)
+    for (int i = 0; i < numStates; i++)
     {
         cout << " q" << i << " |";
-        for (int j = 0; j < nfa.numStates; j++)
+        for (int j = 0; j < numStates; j++)
             cout << " " << (matrix[i][j] == "-" ? "-" : matrix[i][j]) << "  ";
         cout << "\n";
     }
@@ -97,6 +107,12 @@ void AutomataVisualizer::drawNFAGraphical(const NFA &nfa)
 
 void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
 {
+    if (dfa.numStates <= 0)
+    {
+        cout << "\n[WARN] No DFA to display (numStates <= 0)\n";
+        return;
+    }
+
     cout << "\n+==================================================+\n";
     cout << "|                 DFA GRAPHICAL VIEW                |\n";
     cout << "+==================================================+\n";
@@ -123,7 +139,8 @@ void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
     cout << "TRANSITION TABLE:\n" << string(60, '=') << "\n";
 
     int maxWidth = 3;
-    for (int i = 0; i < dfa.numStates; i++)
+    int numStates = min(dfa.numStates, 20); // Cap for display
+    for (int i = 0; i < numStates; i++)
     {
         string rep = dfa.formatStateSubset(i);
         maxWidth = max(maxWidth, (int)rep.length());
@@ -142,6 +159,7 @@ void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
         }
     }
     int colWidth = max(maxWidth + 4, 7);
+    colWidth = min(colWidth, 30); // Cap width
 
     cout << "+" << string(colWidth, '-');
     for (size_t i = 0; i < dfa.alphabet.size(); i++)
@@ -154,7 +172,7 @@ void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
         cout << "+" << string(colWidth, '-');
     cout << "+\n";
 
-    for (int i = 0; i < dfa.numStates; i++)
+    for (int i = 0; i < numStates; i++)
     {
         cout << "| " << left << setw(colWidth - 2) << dfa.formatStateSubset(i);
         for (char sym : dfa.alphabet)
@@ -173,7 +191,7 @@ void AutomataVisualizer::drawDFAGraphical(const DFA &dfa)
     cout << "+\n";
 
     cout << "\nVISUAL FLOW:\n" << string(50, '-') << "\n";
-    for (int i = 0; i < dfa.numStates; i++)
+    for (int i = 0; i < numStates; i++)
     {
         for (char sym : dfa.alphabet)
         {
